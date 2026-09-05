@@ -2,7 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
-import { AlertCircle, BriefcaseBusiness, Mail, RefreshCw, Users } from "lucide-react";
+import {
+  AlertCircle,
+  BriefcaseBusiness,
+  ChevronLeft,
+  ChevronRight,
+  Mail,
+  RefreshCw,
+  Search,
+  Users,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isUserList, type User, USERS_API_URL } from "@/lib/users";
 
@@ -19,6 +29,9 @@ export function StaffDirectory() {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [department, setDepartment] = useState("all");
+  const [page, setPage] = useState(1);
 
   const loadUsers = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
@@ -104,9 +117,152 @@ export function StaffDirectory() {
           </section>
         )}
 
-        {!isLoading && !error && <UserList users={users} />}
+        {!isLoading && !error && (
+          <DirectoryResults
+            department={department}
+            onDepartmentChange={(value) => {
+              setDepartment(value);
+              setPage(1);
+            }}
+            onSearchChange={(value) => {
+              setSearch(value);
+              setPage(1);
+            }}
+            page={page}
+            search={search}
+            setPage={setPage}
+            users={users}
+          />
+        )}
       </div>
     </main>
+  );
+}
+
+function DirectoryResults({
+  department,
+  onDepartmentChange,
+  onSearchChange,
+  page,
+  search,
+  setPage,
+  users,
+}: {
+  department: string;
+  onDepartmentChange: (value: string) => void;
+  onSearchChange: (value: string) => void;
+  page: number;
+  search: string;
+  setPage: (page: number) => void;
+  users: User[];
+}) {
+  const departments = Array.from(new Set(users.map((user) => user.department))).sort();
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch =
+      !normalizedSearch ||
+      user.name.toLowerCase().includes(normalizedSearch) ||
+      user.email.toLowerCase().includes(normalizedSearch);
+    const matchesDepartment = department === "all" || user.department === department;
+
+    return matchesSearch && matchesDepartment;
+  });
+  const pageSize = 10;
+  const pageCount = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const visibleUsers = filteredUsers.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  return (
+    <>
+      <section aria-label="Directory filters" className="mb-6 flex flex-col gap-3 rounded-2xl border border-[#dce5df] bg-white p-3 sm:flex-row">
+        <label className="relative min-w-0 flex-1">
+          <span className="sr-only">Search by name or email</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#7b9087]" aria-hidden="true" />
+          <input
+            className="h-10 w-full rounded-xl border border-transparent bg-[#f5f7f4] pl-10 pr-10 text-sm text-[#18332d] outline-none transition-colors placeholder:text-[#8da098] focus:border-[#79a38d] focus:bg-white focus:ring-3 focus:ring-[#dcebe2]"
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Search name or email"
+            type="search"
+            value={search}
+          />
+          {search && (
+            <button
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7b9087] hover:text-[#18332d]"
+              onClick={() => onSearchChange("")}
+              type="button"
+            >
+              <X className="size-4" aria-hidden="true" />
+            </button>
+          )}
+        </label>
+        <label>
+          <span className="sr-only">Filter by department</span>
+          <select
+            className="h-10 w-full rounded-xl border border-transparent bg-[#f5f7f4] px-3 text-sm text-[#18332d] outline-none focus:border-[#79a38d] focus:bg-white focus:ring-3 focus:ring-[#dcebe2] sm:w-52"
+            onChange={(event) => onDepartmentChange(event.target.value)}
+            value={department}
+          >
+            <option value="all">All departments</option>
+            {departments.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
+
+      <div className="mb-4 flex items-center justify-between gap-4 text-sm text-[#6a8178]">
+        <p>
+          Showing {filteredUsers.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–
+          {Math.min(safePage * pageSize, filteredUsers.length)} of {filteredUsers.length} members
+        </p>
+        {filteredUsers.length > 0 && <p>Page {safePage} of {pageCount}</p>}
+      </div>
+
+      {filteredUsers.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-[#cbd8d1] bg-white p-10 text-center">
+          <h2 className="font-serif text-2xl">No matching team members</h2>
+          <p className="mt-2 text-sm text-[#557069]">Try a different name, email, or department.</p>
+        </section>
+      ) : (
+        <>
+          <UserList users={visibleUsers} />
+          <nav aria-label="Directory pagination" className="mt-6 flex items-center justify-center gap-2">
+            <Button
+              aria-label="Previous page"
+              disabled={safePage === 1}
+              onClick={() => setPage(safePage - 1)}
+              size="icon"
+              variant="outline"
+            >
+              <ChevronLeft aria-hidden="true" />
+            </Button>
+            {Array.from({ length: pageCount }, (_, index) => index + 1).map((pageNumber) => (
+              <Button
+                aria-current={pageNumber === safePage ? "page" : undefined}
+                aria-label={`Page ${pageNumber}`}
+                key={pageNumber}
+                onClick={() => setPage(pageNumber)}
+                variant={pageNumber === safePage ? "default" : "ghost"}
+              >
+                {pageNumber}
+              </Button>
+            ))}
+            <Button
+              aria-label="Next page"
+              disabled={safePage === pageCount}
+              onClick={() => setPage(safePage + 1)}
+              size="icon"
+              variant="outline"
+            >
+              <ChevronRight aria-hidden="true" />
+            </Button>
+          </nav>
+        </>
+      )}
+    </>
   );
 }
 
