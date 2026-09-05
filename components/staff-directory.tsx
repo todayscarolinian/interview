@@ -5,16 +5,25 @@ import Image from "next/image";
 import {
   AlertCircle,
   BriefcaseBusiness,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Mail,
+  Pencil,
+  Plus,
   RefreshCw,
   Search,
   Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { isUserList, type User, USERS_API_URL } from "@/lib/users";
+import { UserFormDialog } from "@/components/user-form-dialog";
+import {
+  isUserList,
+  type User,
+  type UserFormValues,
+  USERS_API_URL,
+} from "@/lib/users";
 
 function getInitials(name: string) {
   return name
@@ -32,6 +41,10 @@ export function StaffDirectory() {
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("all");
   const [page, setPage] = useState(1);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<"add" | "edit">("add");
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const loadUsers = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
@@ -68,6 +81,40 @@ export function StaffDirectory() {
     }
   }, []);
 
+  const openAddForm = () => {
+    setFormMode("add");
+    setSelectedUser(null);
+    setSuccessMessage(null);
+    setFormOpen(true);
+  };
+
+  const openEditForm = (user: User) => {
+    setFormMode("edit");
+    setSelectedUser(user);
+    setSuccessMessage(null);
+    setFormOpen(true);
+  };
+
+  const saveUser = (values: UserFormValues) => {
+    if (formMode === "edit" && selectedUser) {
+      setUsers((currentUsers) =>
+        currentUsers.map((user) => (user.id === selectedUser.id ? { ...user, ...values } : user)),
+      );
+      setSuccessMessage(`${values.name} was updated successfully.`);
+    } else {
+      const newUser: User = {
+        ...values,
+        id: `local-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      };
+      setUsers((currentUsers) => [newUser, ...currentUsers]);
+      setPage(1);
+      setSuccessMessage(`${values.name} was added successfully.`);
+    }
+
+    setFormOpen(false);
+  };
+
   useEffect(() => {
     const controller = new AbortController();
     const loadTask = window.setTimeout(() => {
@@ -93,9 +140,17 @@ export function StaffDirectory() {
               Find the people who keep the organization moving.
             </p>
           </div>
-          <div className="flex items-center gap-3 rounded-full border border-[#cbd8d1] bg-white px-4 py-2 text-sm text-[#557069]">
-            <Users className="size-4 text-[#3d7764]" aria-hidden="true" />
-            <span>{isLoading ? "Loading directory" : `${users.length} team members`}</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3 rounded-full border border-[#cbd8d1] bg-white px-4 py-2 text-sm text-[#557069]">
+              <Users className="size-4 text-[#3d7764]" aria-hidden="true" />
+              <span>{isLoading ? "Loading directory" : `${users.length} team members`}</span>
+            </div>
+            {!isLoading && !error && (
+              <Button onClick={openAddForm}>
+                <Plus aria-hidden="true" />
+                Add user
+              </Button>
+            )}
           </div>
         </header>
 
@@ -118,7 +173,14 @@ export function StaffDirectory() {
         )}
 
         {!isLoading && !error && (
-          <DirectoryResults
+          <>
+            {successMessage && (
+              <div className="mb-6 flex items-center gap-3 rounded-xl border border-[#b8dbc3] bg-[#f1faf3] px-4 py-3 text-sm font-medium text-[#34704a]" role="status">
+                <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+                {successMessage}
+              </div>
+            )}
+            <DirectoryResults
             department={department}
             onDepartmentChange={(value) => {
               setDepartment(value);
@@ -132,9 +194,18 @@ export function StaffDirectory() {
             search={search}
             setPage={setPage}
             users={users}
-          />
+            onEdit={openEditForm}
+            />
+          </>
         )}
       </div>
+      <UserFormDialog
+        mode={formMode}
+        onClose={() => setFormOpen(false)}
+        onSubmit={saveUser}
+        open={formOpen}
+        user={selectedUser}
+      />
     </main>
   );
 }
@@ -147,6 +218,7 @@ function DirectoryResults({
   search,
   setPage,
   users,
+  onEdit,
 }: {
   department: string;
   onDepartmentChange: (value: string) => void;
@@ -155,6 +227,7 @@ function DirectoryResults({
   search: string;
   setPage: (page: number) => void;
   users: User[];
+  onEdit: (user: User) => void;
 }) {
   const departments = Array.from(new Set(users.map((user) => user.department))).sort();
   const normalizedSearch = search.trim().toLowerCase();
@@ -228,7 +301,7 @@ function DirectoryResults({
         </section>
       ) : (
         <>
-          <UserList users={visibleUsers} />
+          <UserList onEdit={onEdit} users={visibleUsers} />
           <nav aria-label="Directory pagination" className="mt-6 flex items-center justify-center gap-2">
             <Button
               aria-label="Previous page"
@@ -282,7 +355,7 @@ function LoadingState() {
   );
 }
 
-function UserList({ users }: { users: User[] }) {
+function UserList({ onEdit, users }: { onEdit: (user: User) => void; users: User[] }) {
   if (users.length === 0) {
     return (
       <section className="rounded-2xl border border-dashed border-[#cbd8d1] bg-white p-10 text-center">
@@ -322,6 +395,9 @@ function UserList({ users }: { users: User[] }) {
           <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${user.status ? "bg-[#e4f2e8] text-[#34704a]" : "bg-[#f0f2f0] text-[#718079]"}`}>
             {user.status ? "Active" : "Away"}
           </span>
+          <Button aria-label={`Edit ${user.name}`} onClick={() => onEdit(user)} size="icon" variant="ghost">
+            <Pencil aria-hidden="true" />
+          </Button>
         </article>
       ))}
     </section>
