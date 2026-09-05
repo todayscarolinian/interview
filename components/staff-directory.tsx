@@ -371,13 +371,15 @@ function UserList({ onEdit, users }: { onEdit: (user: User) => void; users: User
         <article className="group flex flex-col gap-4 rounded-2xl border border-[#dce5df] bg-white p-4 shadow-[0_2px_12px_rgba(24,51,45,0.03)] transition-shadow hover:shadow-[0_8px_24px_rgba(24,51,45,0.08)] sm:flex-row sm:items-center sm:p-5" key={user.id}>
           <div className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#dcebe2] font-semibold text-[#3d7764]">
             <span aria-hidden="true">{getInitials(user.name)}</span>
-            <Image
-              alt=""
-              className="absolute inset-0 size-full object-cover"
-              height={56}
-              src={user.avatar}
-              width={56}
-            />
+            {user.avatar && (
+              <Image
+                alt=""
+                className="absolute inset-0 size-full object-cover"
+                height={56}
+                src={user.avatar}
+                width={56}
+              />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-base font-semibold text-[#18332d]">{user.name}</h2>
